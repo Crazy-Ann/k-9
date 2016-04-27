@@ -55,6 +55,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -205,6 +206,38 @@ public class WebDavFolderTest {
         folder.fetch(messages, profile, listener);
         verify(listener, times(25)).messageStarted(any(String.class), anyInt(), eq(25));
         verify(listener, times(25)).messageFinished(any(WebDavMessage.class), anyInt(), eq(25));
+    }
+
+    @Test
+    public void folder_does_not_notify_listener_twice_when_fetching_flags_and_bodies()
+            throws MessagingException, IOException, URISyntaxException {
+        setupStoreForMessageFetching();
+        when(mockStore.processRequest(anyString(), anyString(), anyString(), anyMap()))
+                .thenReturn(mockDataSet);
+        List<WebDavMessage> messages = setup25MessagesToFetch();
+        when(mockHttpClient.executeOverride(any(HttpUriRequest.class), any(HttpContext.class))).thenAnswer(
+                new Answer<HttpResponse>() {
+                    @Override
+                    public HttpResponse answer(InvocationOnMock invocation) throws Throwable {
+                        HttpResponse httpResponse = mock(HttpResponse.class);
+                        StatusLine statusLine = mock(StatusLine.class);
+                        when(httpResponse.getStatusLine()).thenReturn(statusLine);
+                        when(statusLine.getStatusCode()).thenReturn(200);
+
+                        BasicHttpEntity httpEntity = new BasicHttpEntity();
+                        String body = "";
+                        httpEntity.setContent(new ByteArrayInputStream(body.getBytes("UTF-8")));
+                        when(httpResponse.getEntity()).thenReturn(httpEntity);
+                        return httpResponse;
+                    }
+                });
+
+        FetchProfile profile = new FetchProfile();
+        profile.add(FetchProfile.Item.FLAGS);
+        profile.add(FetchProfile.Item.BODY);
+        folder.fetch(messages, profile, listener);
+        verify(listener, times(25)).messageStarted(any(String.class), anyInt(), anyInt());
+        verify(listener, times(25)).messageFinished(any(WebDavMessage.class), anyInt(), anyInt());
     }
 
     private void setupStoreForMessageFetching() {
